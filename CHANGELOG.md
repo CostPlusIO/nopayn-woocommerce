@@ -88,3 +88,8 @@
 ** 1.0.20 **
 
 * Rollback plugin to 1.0.16 version.
+
+** 1.0.21 **
+
+* Fixed bug: process_payment() returns boolean false, which causes an uncaught TypeError.
+* Fixed bug: customer address and phone number mapping issue.

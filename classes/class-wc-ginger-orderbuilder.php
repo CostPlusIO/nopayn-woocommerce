@@ -213,13 +213,8 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetCustomerInfo()
     {
-        $this->billingAddress = $this->woocommerceOrder->get_address('billing');
-        $this->shippingAddress = $this->woocommerceOrder->get_address('shipping');
-
-        if (!$this->shippingAddress['address_1'] && !$this->shippingAddress['address_2'])
-        {
-            $this->shippingAddress = $this->billingAddress;
-        }
+        $this->billingAddress = (array) $this->woocommerceOrder->get_address('billing');
+        $this->shippingAddress = (array) $this->woocommerceOrder->get_address('shipping');
 
         return array_filter([
             'address_type' => $this->gingerGetAddressType(),
@@ -229,6 +224,7 @@ class WC_Ginger_Orderbuilder
             'last_name' => $this->gingerGetLastName(),
             'address' => $this->gingerGetAddress(),
             'postal_code' => $this->gingerGetPostalCode(),
+            'city' => $this->gingerGetCity(),
             'country' => $this->gingerGetCountry(),
             'phone_numbers' => $this->gingerGetPhoneNumbers(),
             'user_agent' => $this->gingerGetUserAgent(),
@@ -267,33 +263,75 @@ class WC_Ginger_Orderbuilder
     }
 
     /**
-     * Function returns additional addresses
+     * Function returns additional addresses, the shipping address is sent as a delivery address.
+     * The billing address is already sent as the root customer address and must not be repeated here.
      * @return string[][]
      */
     public function gingerGetAdditionalAddresses():array
     {
+        $address = $this->gingerGetAddressLines($this->shippingAddress);
+
+        if ($address === '')
+        {
+            return []; //no separate delivery address available
+        }
+
         return [
-            [
-                'address_type' => 'billing',
-                'address' => (string) trim($this->billingAddress['address_1'])
-                    .' '.trim($this->billingAddress['address_2'])
-                    .' '.trim($this->billingAddress['city']),
-                'country' => (string) $this->billingAddress['country'],
-                'postal_code' => $this->billingAddress['postcode']
-            ]
+            array_filter([
+                'address_type' => 'delivery',
+                'address' => $address,
+                'postal_code' => str_replace(' ', '', $this->gingerGetFieldValue($this->shippingAddress, 'postcode')),
+                'city' => $this->gingerGetFieldValue($this->shippingAddress, 'city'),
+                'country' => strtoupper($this->gingerGetFieldValue($this->shippingAddress, 'country'))
+            ])
         ];
     }
 
     /**
-     * Function returns customer address
+     * Function returns a trimmed value of the given address field
+     * @param array $address
+     * @param string $field
+     * @return string
+     */
+    protected function gingerGetFieldValue($address, $field):string
+    {
+        return isset($address[$field]) ? trim((string) $address[$field]) : '';
+    }
+
+    /**
+     * Function returns a billing field value with a fallback to the shipping one
+     * @param string $field
+     * @return string
+     */
+    protected function gingerGetAddressField($field):string
+    {
+        $billingValue = $this->gingerGetFieldValue($this->billingAddress, $field);
+
+        return $billingValue !== '' ? $billingValue : $this->gingerGetFieldValue($this->shippingAddress, $field);
+    }
+
+    /**
+     * Function returns street and house number of the given address, the city and the postal code
+     * are sent as separate fields
+     * @param array $address
+     * @return string
+     */
+    protected function gingerGetAddressLines($address):string
+    {
+        return trim($this->gingerGetFieldValue($address, 'address_1')
+            .' '.$this->gingerGetFieldValue($address, 'address_2'));
+    }
+
+    /**
+     * Function returns customer address, the billing address is preferred and the shipping address
+     * is only used when there is no billing street available
      * @return string
      */
     public function gingerGetAddress():string
     {
-        return trim($this->shippingAddress['address_1'])
-            .' '.trim($this->shippingAddress['address_2'])
-            .' '.trim(str_replace(' ', '', $this->shippingAddress['postcode']))
-            .' '.trim($this->shippingAddress['city']);
+        $address = $this->gingerGetAddressLines($this->billingAddress);
+
+        return $address !== '' ? $address : $this->gingerGetAddressLines($this->shippingAddress);
     }
 
     /**
@@ -319,12 +357,14 @@ class WC_Ginger_Orderbuilder
     }
 
     /**
-     * Function returns locale
+     * Function returns locale, an unsupported locale is omitted instead of failing the validation
      * @return string
      */
     public function gingerGetLocale():string
     {
-        return get_locale();
+        $locale = (string) get_locale();
+
+        return preg_match('/^[a-zA-Z]{2}([-_][a-zA-Z]{2})?$/', $locale) ? $locale : '';
     }
 
     /**
@@ -333,9 +373,65 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetPhoneNumbers(): array
     {
-        return [
-            $this->billingAddress['phone']
-        ];
+        $phoneNumber = $this->gingerNormalizePhoneNumber(
+            $this->gingerGetAddressField('phone'),
+            $this->gingerGetCountry()
+        );
+
+        return $phoneNumber === '' ? [] : [$phoneNumber];
+    }
+
+    /**
+     * Function converts a phone number into the E.164 format, the country is used to resolve
+     * numbers that are stored in a national format. An empty string is returned when the number
+     * can not be normalised, so the field gets omitted instead of failing the validation.
+     * @param string $phoneNumber
+     * @param string $country
+     * @return string
+     */
+    public function gingerNormalizePhoneNumber($phoneNumber, $country): string
+    {
+        $phoneNumber = trim((string) $phoneNumber);
+        if ($phoneNumber === '') return '';
+
+        $isInternational = strpos($phoneNumber, '+') === 0;
+        $digits = preg_replace('/\D+/', '', $phoneNumber);
+        if ($digits === '') return '';
+
+        if (!$isInternational && strpos($digits, '00') === 0)
+        {
+            $digits = substr($digits, 2);
+            $isInternational = true;
+        }
+
+        if (!$isInternational)
+        {
+            $callingCode = preg_replace('/\D+/', '', $this->gingerGetCountryCallingCode($country));
+            if ($callingCode === '') return '';
+
+            $digits = strpos($digits, $callingCode) === 0
+                ? $digits //the number already carries the country calling code
+                : $callingCode.ltrim($digits, '0'); //strip the national trunk prefix
+        }
+
+        $phoneNumber = '+'.$digits;
+
+        return preg_match('/^\+[1-9]\d{7,14}$/', $phoneNumber) ? $phoneNumber : '';
+    }
+
+    /**
+     * Function returns the country calling code of the given country
+     * @param string $country
+     * @return string
+     */
+    public function gingerGetCountryCallingCode($country): string
+    {
+        if (!$country || !function_exists('WC') || !WC()->countries) return '';
+
+        $callingCode = WC()->countries->get_country_calling_code(strtoupper($country));
+        if (is_array($callingCode)) $callingCode = reset($callingCode); //some countries have several calling codes
+
+        return (string) $callingCode;
     }
 
     /**
@@ -344,7 +440,7 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetCountry():string
     {
-        return $this->shippingAddress['country'];
+        return strtoupper($this->gingerGetAddressField('country'));
     }
 
     /**
@@ -353,7 +449,16 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetPostalCode():string
     {
-        return str_replace(' ', '', $this->shippingAddress['postcode']);
+        return str_replace(' ', '', $this->gingerGetAddressField('postcode'));
+    }
+
+    /**
+     * Function returns address's city
+     * @return string
+     */
+    public function gingerGetCity():string
+    {
+        return $this->gingerGetAddressField('city');
     }
 
     /**
@@ -362,7 +467,7 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetFirstName():string
     {
-        return $this->shippingAddress['first_name'];
+        return $this->gingerGetAddressField('first_name');
     }
 
     /**
@@ -371,7 +476,7 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetLastName():string
     {
-        return $this->shippingAddress['last_name'];
+        return $this->gingerGetAddressField('last_name');
     }
 
     /**
@@ -380,7 +485,7 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetEmailAddress():string
     {
-        return $this->billingAddress['email'];
+        return $this->gingerGetAddressField('email');
     }
 
     /**
@@ -407,7 +512,7 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetAddressType(): string
     {
-        return 'customer';
+        return 'billing';
     }
 
     /**

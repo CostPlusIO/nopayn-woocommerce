@@ -39,7 +39,7 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
         if($this instanceof GingerIdentificationPay)
         {
             // Create banktransfer order in ginger system when creating an order from the admin panel
-            add_action('woocommerce_process_shop_order_meta', array($this, 'process_payment'), 41, 1);
+            add_action('woocommerce_process_shop_order_meta', array($this, 'ginger_process_admin_order'), 41, 1);
             // Sends instructions for payment in the Order email
             add_action( 'woocommerce_email_after_order_table', array($this, 'ginger_add_order_email_instructions'), 10, 1 );
         }
@@ -264,45 +264,52 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
 
 
     /**
+     * Function ginger_process_admin_order
+     * Admin panel entry point for bank transfer orders. Runs on every order save,
+     * hence orders paid by another payment method have to be skipped.
+     *
+     * @param int $order_id
+     */
+    public function ginger_process_admin_order($order_id)
+    {
+        $order = wc_get_order($order_id);
+
+        if (!$order || $order->get_payment_method() !== $this->id) return;
+
+        $this->process_payment($order_id);
+    }
+
+    /**
      * @param int $order_id
      * @return array
      */
     public function process_payment($order_id)
     {
         $this->merchant_order_id = $order_id;
-        $this->woocommerceOrder = new WC_Order($this->merchant_order_id);
-        $this->orderBuilder = new WC_Ginger_Orderbuilder($this,$this->id,$this->woocommerceOrder,$this->merchant_order_id);
+        $this->woocommerceOrder = wc_get_order($this->merchant_order_id);
 
-        if($this->woocommerceOrder->get_payment_method() != $this->id) return false;
+        if (!$this->woocommerceOrder) return $this->ginger_get_failure_result(__('Order could not be loaded.', WC_Ginger_BankConfig::BANK_PREFIX));
+
+        $this->orderBuilder = new WC_Ginger_Orderbuilder($this,$this->id,$this->woocommerceOrder,$this->merchant_order_id);
 
         try {
             $gingerOrder = $this->gingerClient->createOrder($this->orderBuilder->gingerGetBuiltOrder());
-        } catch (\Exception $exception) {
-            wc_add_notice(sprintf(__('There was a problem processing your transaction: %s', WC_Ginger_BankConfig::BANK_PREFIX), $exception->getMessage()), 'error');
-            return [
-                'result' => 'failure'
-            ];
+        } catch (\Throwable $exception) {
+            return $this->ginger_get_failure_result(sprintf(__('There was a problem processing your transaction: %s', WC_Ginger_BankConfig::BANK_PREFIX), $exception->getMessage()));
         }
 
         update_post_meta($this->merchant_order_id, WC_Ginger_BankConfig::BANK_PREFIX.'_order_id', $gingerOrder['id']);
 
         if ($gingerOrder['status'] == 'error')
         {
-            wc_add_notice(current($gingerOrder['transactions'])['customer_message'], 'error');
-            return [
-                'result' => 'failure'
-            ];
+            return $this->ginger_get_failure_result(current($gingerOrder['transactions'])['customer_message']);
         }
         if($gingerOrder['status'] == 'cancelled')
         {
-            wc_add_notice(
+            return $this->ginger_get_failure_result(
                 __('Unfortunately, we can not currently accept your purchase. Please choose another payment option to complete your order. We apologize for the inconvenience.'),
-                'error'
+                ['redirect' => $this->woocommerceOrder->get_cancel_order_url($this->woocommerceOrder)]
             );
-            return [
-                'result' => 'failure',
-                'redirect' => $this->woocommerceOrder->get_cancel_order_url($this->woocommerceOrder)
-            ];
         }
 
         if($this instanceof GingerIdentificationPay)
@@ -325,10 +332,38 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
             $paymentURL = $gingerOrder['order_url']; //in gateway with hosted payment page - payment url must be $gingerOrder['order_url']
         }
 
+        $paymentURL = $paymentURL ?? current($gingerOrder['transactions'])['payment_url'] ?? null;
+
+        if (!$paymentURL) return $this->ginger_get_failure_result(__('The payment URL is missing in the gateway response.', WC_Ginger_BankConfig::BANK_PREFIX));
+
         return [
             'result' => 'success',
-            'redirect' => $paymentURL ?? current($gingerOrder['transactions'])['payment_url']
+            'redirect' => $paymentURL
         ];
+    }
+
+    /**
+     * Function ginger_get_failure_result
+     * Builds the failure array expected by WooCommerce. process_payment() must always
+     * return an array: the Store API (Blocks checkout) merges the returned value with
+     * array_merge() and a non-array return results in a fatal error.
+     *
+     * @param string $message
+     * @param array $additionalData
+     * @return array
+     */
+    protected function ginger_get_failure_result($message, array $additionalData = [])
+    {
+        wc_add_notice($message, 'error');
+
+        return array_merge(
+            [
+                'result' => 'failure',
+                'message' => $message, //read by WooCommerce Store API (Blocks checkout)
+                'messages' => $message
+            ],
+            $additionalData
+        );
     }
 
     /**

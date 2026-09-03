@@ -3,7 +3,7 @@
  * Plugin Name: NoPayn Payments
  * Plugin URI: https://nopayn.io/
  * Description: NoPayn WooCommerce plugin
- * Version: 1.0.20
+ * Version: 1.0.21
  * Author: Ginger Payments
  * Author URI: https://www.gingerpayments.com/
  * License: The MIT License (MIT)
@@ -22,6 +22,19 @@ define('GINGER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('GINGER_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
 add_action('plugins_loaded', 'woocommerce_ginger_init', 0);
+
+/**
+ * Declare compatibility with the WooCommerce Cart and Checkout blocks.
+ * Note: 'custom_order_tables' (HPOS) is intentionally not declared, the order meta
+ * is still stored through the WordPress post meta API.
+ */
+add_action('before_woocommerce_init', function ()
+{
+    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil'))
+    {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
+    }
+});
 
 spl_autoload_register(function ($class)
 {
