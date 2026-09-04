@@ -56,11 +56,13 @@ class WC_Ginger_Orderbuilder
      */
     public function gingerGetTransactions(): array
     {
+        $captureMode = $this->gingerGetCaptureMode();
+
         return array_filter([
             'payment_method' => $this->gingerGetPaymentMethod(),
             'payment_method_details' => $this->gingerGetPaymentMethodDetails(),
-            'capture_mode' => $this->gingerGetCaptureMode(),
-            'expiration_period' => $this->gingerGetExpirationPeriod(),
+            'capture_mode' => $captureMode,
+            'expiration_period' => $this->gingerGetTransactionExpirationPeriod($captureMode),
         ]);
     }
 
@@ -78,8 +80,51 @@ class WC_Ginger_Orderbuilder
         return 'PT5M';
     }
 
+    /**
+     * Function returns the expiration period of the transaction. A delayed capture keeps the amount
+     * reserved until the gateway captures it, which is a different period from the few minutes the
+     * shopper gets to pay, so it is configured on the payment method itself.
+     * @param string $captureMode
+     * @return string
+     */
+    public function gingerGetTransactionExpirationPeriod($captureMode): string
+    {
+        return $captureMode === GingerCaptureMode::GINGER_CAPTURE_MODE_DELAYED
+            ? $this->gingerGetDelayedCapturePeriod()
+            : $this->gingerGetExpirationPeriod();
+    }
+
+    /**
+     * Function returns the configured reservation period of a delayed capture
+     * @return string
+     */
+    public function gingerGetDelayedCapturePeriod(): string
+    {
+        $settings = get_option('woocommerce_'.$this->id.'_settings');
+        $period = is_array($settings) ? ($settings['delayed_capture_period'] ?? '') : '';
+
+        return in_array($period, GingerCaptureMode::GINGER_DELAYED_CAPTURE_PERIODS)
+            ? $period
+            : GingerCaptureMode::GINGER_DEFAULT_DELAYED_CAPTURE_PERIOD;
+    }
+
+    /**
+     * Function returns the capture mode of the transaction, an empty string leaves the field out
+     * of the transaction so the gateway applies its own default
+     * @return string
+     */
     public function gingerGetCaptureMode(): string
     {
+        if ($this->paymentMethod instanceof GingerCaptureMode)
+        {
+            $settings = get_option('woocommerce_'.$this->id.'_settings');
+            $captureMode = is_array($settings) ? ($settings['capture_mode'] ?? '') : '';
+
+            return in_array($captureMode, GingerCaptureMode::GINGER_CAPTURE_MODES)
+                ? $captureMode
+                : GingerCaptureMode::GINGER_DEFAULT_CAPTURE_MODE;
+        }
+
         if (str_replace(WC_Ginger_BankConfig::BANK_PREFIX.'_', '', $this->id) == 'credit-card'){
             $settings = get_option('woocommerce_'.WC_Ginger_BankConfig::BANK_PREFIX.'_credit-card_settings');
 
@@ -265,6 +310,11 @@ class WC_Ginger_Orderbuilder
     /**
      * Function returns additional addresses, the shipping address is sent as a delivery address.
      * The billing address is already sent as the root customer address and must not be repeated here.
+     *
+     * The customer object is validated against customer.json or customer_full.json, and both declare
+     * "additionalProperties": false on an additional address. The first only accepts a combined
+     * "address" block and the second only the separate "street" and "city" fields, so an entry may
+     * never mix the two. The combined block is used here, which carries no city field.
      * @return string[][]
      */
     public function gingerGetAdditionalAddresses():array
@@ -279,9 +329,8 @@ class WC_Ginger_Orderbuilder
         return [
             array_filter([
                 'address_type' => 'delivery',
-                'address' => $address,
+                'address' => $address, //street and house number
                 'postal_code' => str_replace(' ', '', $this->gingerGetFieldValue($this->shippingAddress, 'postcode')),
-                'city' => $this->gingerGetFieldValue($this->shippingAddress, 'city'),
                 'country' => strtoupper($this->gingerGetFieldValue($this->shippingAddress, 'country'))
             ])
         ];

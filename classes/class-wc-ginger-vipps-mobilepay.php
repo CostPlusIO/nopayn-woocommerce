@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
-class WC_Ginger_Vipps_Mobilepay extends WC_Ginger_Gateway
+class WC_Ginger_Vipps_Mobilepay extends WC_Ginger_Gateway implements GingerCaptureMode
 {
     public function __construct()
     {

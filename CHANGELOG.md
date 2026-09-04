@@ -93,3 +93,7 @@
 
 * Fixed bug: process_payment() returns boolean false, which causes an uncaught TypeError.
 * Fixed bug: customer address and phone number mapping issue.
+
+** 1.0.22 **
+* Implemented Delayed and manual capture mode for Vipps/MobilePay payment method
+* Fixed bug: customer address and phone number mapping issue.

@@ -5,7 +5,7 @@ The NoPayn WooCommerce plugin allows you to integrate NoPayn’s payment gateway
 NoPayn is built on a foundation of transparency and simplicity. With clear, fixed transaction fees and no hidden costs, our solution is designed to be straightforward for merchants of all sizes. In addition, every transaction made through NoPayn contributes to tree planting, making your payment setup climate positive by default.
 
 ## Version number
-Version 1.0.21
+Version 1.0.22
 
 ## Pre-requisites to install the plug-ins
 * PHP v5.4 and above

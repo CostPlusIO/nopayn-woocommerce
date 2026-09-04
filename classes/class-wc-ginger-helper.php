@@ -233,6 +233,38 @@ class WC_Ginger_Helper
             $formFields = array_merge($formFields, $additionalFields);
         }
 
+        if ($gateway instanceof GingerCaptureMode)
+        {
+            $additionalFields = [
+                'capture_mode' => [
+                    'title' => __('Capture mode', WC_Ginger_BankConfig::BANK_PREFIX),
+                    'type' => 'select',
+                    'description' => __(
+                        'Manual: the payment is only authorized and is captured when the order is marked as completed. Delayed: the payment is authorized and captured automatically by the gateway after the reservation period.',
+                        WC_Ginger_BankConfig::BANK_PREFIX
+                    ),
+                    'options' => [
+                        GingerCaptureMode::GINGER_CAPTURE_MODE_MANUAL => __('Manual', WC_Ginger_BankConfig::BANK_PREFIX),
+                        GingerCaptureMode::GINGER_CAPTURE_MODE_DELAYED => __('Delayed', WC_Ginger_BankConfig::BANK_PREFIX)
+                    ],
+                    'default' => GingerCaptureMode::GINGER_DEFAULT_CAPTURE_MODE,
+                    'desc_tip' => true
+                ],
+                'delayed_capture_period' => [
+                    'title' => __('Delayed capture period', WC_Ginger_BankConfig::BANK_PREFIX),
+                    'type' => 'select',
+                    'description' => __(
+                        'How long the amount stays reserved before the gateway captures it automatically. Only applies when the capture mode is Delayed.',
+                        WC_Ginger_BankConfig::BANK_PREFIX
+                    ),
+                    'options' => self::gingerGetDelayedCapturePeriodOptions(),
+                    'default' => GingerCaptureMode::GINGER_DEFAULT_DELAYED_CAPTURE_PERIOD,
+                    'desc_tip' => true
+                ]
+            ];
+            $formFields = array_merge($formFields, $additionalFields);
+        }
+
         if ($gateway instanceof GingerCountryValidation)
         {
             $additionalFields = [
@@ -247,6 +279,27 @@ class WC_Ginger_Helper
         }
 
         return $formFields;
+    }
+
+    /**
+     * Labels for the selectable delayed capture reservation periods, keyed by ISO 8601 duration
+     *
+     * @return array
+     */
+    public static function gingerGetDelayedCapturePeriodOptions(): array
+    {
+        $labels = [
+            'PT1H' => __('1 hour', WC_Ginger_BankConfig::BANK_PREFIX),
+            'PT6H' => __('6 hours', WC_Ginger_BankConfig::BANK_PREFIX),
+            'PT12H' => __('12 hours', WC_Ginger_BankConfig::BANK_PREFIX),
+            'P1D' => __('1 day', WC_Ginger_BankConfig::BANK_PREFIX),
+            'P2D' => __('2 days', WC_Ginger_BankConfig::BANK_PREFIX),
+            'P3D' => __('3 days', WC_Ginger_BankConfig::BANK_PREFIX),
+            'P7D' => __('7 days', WC_Ginger_BankConfig::BANK_PREFIX),
+        ];
+
+        //the interface decides which periods the gateway accepts, the labels only decorate them
+        return array_intersect_key($labels, array_flip(GingerCaptureMode::GINGER_DELAYED_CAPTURE_PERIODS));
     }
 
     public static function gingerGetAvailableCountries($gateway): array
