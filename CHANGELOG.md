@@ -97,3 +97,8 @@
 ** 1.0.22 **
 * Implemented Delayed and manual capture mode for Vipps/MobilePay payment method
 * Fixed bug: customer address and phone number mapping issue.
+
+** 1.0.23 **
+
+* Fixed bug: payments were created with the shop's current currency instead of the order currency, which sent the order amount with a wrong currency code on shops with a currency switcher.
+* Updated Tested up to WordPress 7.1.

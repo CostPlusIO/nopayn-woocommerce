@@ -2,8 +2,8 @@
 Tags: NoPayn, WooCommerce, payment
 Contributors: nopayn, gingerpayments
 Requires at least: 5.6
-Tested up to: 6.8
-Stable tag: 1.0.22
+Tested up to: 7.1
+Stable tag: 1.0.23
 License: The MIT License (MIT)
 License URI: https://opensource.org/licenses/MIT
 
@@ -110,3 +110,8 @@ NoPayn is built on a foundation of transparency and simplicity. With clear, fixe
 ** 1.0.22 **
 * Implemented Delayed and manual capture mode for Vipps/MobilePay payment method
 * Fixed bug: customer address and phone number mapping issue.
+
+** 1.0.23 **
+
+* Fixed bug: payments were created with the shop's current currency instead of the order currency, which sent the order amount with a wrong currency code on shops with a currency switcher.
+* Updated Tested up to WordPress 7.1.

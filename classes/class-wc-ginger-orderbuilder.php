@@ -243,13 +243,18 @@ class WC_Ginger_Orderbuilder
     }
 
     /**
-     * Method returns currencyCurrency in ISO-4217 format
+     * Method returns the order currency in ISO-4217 format. The amount is taken from the order,
+     * so the currency must be too: with a currency switcher the shop currency of the current
+     * session can differ from the currency the order was placed in. The shop currency is only
+     * a fallback when no order is available.
      *
      * @return string
      */
     public function gingerGetCurrency()
     {
-        return get_woocommerce_currency();
+        return $this->woocommerceOrder instanceof WC_Order
+            ? $this->woocommerceOrder->get_currency()
+            : get_woocommerce_currency();
     }
 
     /**
