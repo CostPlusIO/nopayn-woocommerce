@@ -302,7 +302,10 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
 
         if ($gingerOrder['status'] == 'error')
         {
-            return $this->ginger_get_failure_result(current($gingerOrder['transactions'])['customer_message']);
+            return $this->ginger_get_failure_result(
+                current($gingerOrder['transactions'])['customer_message']
+                ?? __('There was a problem processing your transaction.', WC_Ginger_BankConfig::BANK_PREFIX)
+            );
         }
         if($gingerOrder['status'] == 'cancelled')
         {
@@ -414,7 +417,16 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
 
         if (is_array($gingerOrderIDArray) && $gingerOrderIDArray[0])
         {
-            $gingerOrder = $this->gingerClient->getOrder($gingerOrderIDArray[0]);
+            try {
+                $gingerOrder = $this->gingerClient->getOrder($gingerOrderIDArray[0]);
+            } catch (\Throwable $exception) {
+                // e.g. an order created under a previous API key: render the page without the payment status
+                wc_get_logger()->error(
+                    sprintf('Order-received page: could not load %s order %s for order #%s: %s', WC_Ginger_BankConfig::BANK_LABEL, $gingerOrderIDArray[0], $order_id, $exception->getMessage()),
+                    ['source' => WC_Ginger_BankConfig::BANK_PREFIX]
+                );
+                return;
+            }
             if ($gingerOrder['status'] == 'processing')
             {
                 echo esc_html__(
@@ -588,7 +600,7 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
 
         if($gingerRefundOrder['status'] !== 'completed')
         {
-            if(current($gingerRefundOrder['transactions'])['customer_message']){
+            if(current($gingerRefundOrder['transactions'])['customer_message'] ?? ''){
                 throw new Exception( sprintf(
                     __('Refund order is not completed: %s', WC_Ginger_BankConfig::BANK_PREFIX),
                     current($gingerRefundOrder['transactions'])['customer_message']
@@ -608,6 +620,9 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
      */
     function ginger_order_received_text($text, $order)
     {
+        // WooCommerce passes false/null when it renders the page without a verified order
+        if (!$order instanceof WC_Order) return $text;
+
         $orderBuilder = new WC_Ginger_Orderbuilder($this,$this->id,$this->woocommerceOrder,$this->merchant_order_id);
         $orderBuilder->gingerSetMerchantOrderID($order->get_id());
 

@@ -68,7 +68,7 @@ class WC_Ginger_Callback extends WC_Ginger_Gateway
         }
 
         $base_msg = __('There was a problem processing your transaction.', WC_Ginger_BankConfig::BANK_PREFIX);
-        $full_msg = $base_msg . ' ' . current($gingerOrder['transactions'])['customer_message'];
+        $full_msg = trim($base_msg . ' ' . (current($gingerOrder['transactions'])['customer_message'] ?? ''));
         wc_add_notice($full_msg, 'error');        if ($this->get_option('failed_redirect') == 'cart') {
             $url = $order->get_cancel_order_url();
         } else {
