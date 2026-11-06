@@ -3,7 +3,7 @@ Tags: NoPayn, WooCommerce, payment
 Contributors: nopayn, gingerpayments
 Requires at least: 5.6
 Tested up to: 7.1
-Stable tag: 1.0.23
+Stable tag: 1.0.24
 License: The MIT License (MIT)
 License URI: https://opensource.org/licenses/MIT
 
@@ -115,3 +115,10 @@ NoPayn is built on a foundation of transparency and simplicity. With clear, fixe
 
 * Fixed bug: payments were created with the shop's current currency instead of the order currency, which sent the order amount with a wrong currency code on shops with a currency switcher.
 * Updated Tested up to WordPress 7.1.
+
+** 1.0.24 **
+
+* Fixed bug: the order-received page showed a critical error when the order could not be loaded from the NoPayn API, for example for orders created under a previous API key.
+* Fixed bug: the order-received page showed a critical error when WooCommerce passed no order to the plugin, for example for a guest who has to confirm the order's email address first or for a failed order.
+* Fixed bug: PHP warning "Undefined array key customer_message" when the NoPayn API returned a transaction without a customer message.
+* Fixed bug: PHP deprecation notice for FILTER_SANITIZE_STRING on every payment return and webhook.
