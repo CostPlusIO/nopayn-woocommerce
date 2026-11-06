@@ -303,8 +303,8 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
         if ($gingerOrder['status'] == 'error')
         {
             return $this->ginger_get_failure_result(
-                current($gingerOrder['transactions'])['customer_message']
-                ?? __('There was a problem processing your transaction.', WC_Ginger_BankConfig::BANK_PREFIX)
+                $this->ginger_get_customer_message($gingerOrder)
+                ?: __('There was a problem processing your transaction.', WC_Ginger_BankConfig::BANK_PREFIX)
             );
         }
         if($gingerOrder['status'] == 'cancelled')
@@ -367,6 +367,18 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
             ],
             $additionalData
         );
+    }
+
+    /**
+     * Returns the customer message of the order's first transaction, or an empty string:
+     * the API omits it for transactions in status new, expired and cancelled.
+     *
+     * @param array $gingerOrder
+     * @return string
+     */
+    protected function ginger_get_customer_message($gingerOrder): string
+    {
+        return current($gingerOrder['transactions'])['customer_message'] ?? '';
     }
 
     /**
@@ -600,10 +612,11 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
 
         if($gingerRefundOrder['status'] !== 'completed')
         {
-            if(current($gingerRefundOrder['transactions'])['customer_message'] ?? ''){
+            $customerMessage = $this->ginger_get_customer_message($gingerRefundOrder);
+            if($customerMessage){
                 throw new Exception( sprintf(
                     __('Refund order is not completed: %s', WC_Ginger_BankConfig::BANK_PREFIX),
-                    current($gingerRefundOrder['transactions'])['customer_message']
+                    $customerMessage
                 ));
             }else{
                 throw new Exception(__( 'Refund order is not completed', WC_Ginger_BankConfig::BANK_PREFIX));
@@ -615,12 +628,12 @@ class WC_Ginger_Gateway extends WC_Payment_Gateway
      * Custom text on the receipt page.
      *
      * @param string $text
-     * @param WC_Order $order
+     * @param WC_Order|false|null $order
      * @return string
      */
     function ginger_order_received_text($text, $order)
     {
-        // WooCommerce passes false/null when it renders the page without a verified order
+        // WooCommerce passes false/null without a verified order, and null for a failed order on the block template
         if (!$order instanceof WC_Order) return $text;
 
         $orderBuilder = new WC_Ginger_Orderbuilder($this,$this->id,$this->woocommerceOrder,$this->merchant_order_id);

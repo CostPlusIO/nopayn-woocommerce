@@ -106,5 +106,6 @@
 ** 1.0.24 **
 
 * Fixed bug: the order-received page showed a critical error when the order could not be loaded from the NoPayn API, for example for orders created under a previous API key.
-* Fixed bug: the order-received page showed a critical error when WooCommerce rendered it without a verified order, for example for a guest who has to confirm the order's email address first.
-* Fixed bug: PHP warning "Undefined array key customer_message" when a customer returned from a payment without a customer message.
+* Fixed bug: the order-received page showed a critical error when WooCommerce passed no order to the plugin, for example for a guest who has to confirm the order's email address first or for a failed order.
+* Fixed bug: PHP warning "Undefined array key customer_message" when the NoPayn API returned a transaction without a customer message.
+* Fixed bug: PHP deprecation notice for FILTER_SANITIZE_STRING on every payment return and webhook.

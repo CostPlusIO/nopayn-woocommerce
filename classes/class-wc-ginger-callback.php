@@ -19,7 +19,7 @@ class WC_Ginger_Callback extends WC_Ginger_Gateway
 
     public function ginger_handle_callback()
     {
-        if (!sanitize_text_field(filter_input(INPUT_GET,'order_id',FILTER_SANITIZE_STRING))) // hence it's webhook
+        if (!sanitize_text_field(filter_input(INPUT_GET,'order_id'))) // hence it's webhook
         {
             $input = json_decode(file_get_contents("php://input"), true);
             if (!in_array($input['event'], array("status_changed"))) die("Only work to do if the status changed");
@@ -58,7 +58,7 @@ class WC_Ginger_Callback extends WC_Ginger_Gateway
             exit;
         }
 
-        $gingerOrder = $this->ginger_handle_get_order(sanitize_text_field(filter_input(INPUT_GET,'order_id',FILTER_SANITIZE_STRING)));
+        $gingerOrder = $this->ginger_handle_get_order(sanitize_text_field(filter_input(INPUT_GET,'order_id')));
         $order = new WC_Order($gingerOrder['merchant_order_id']);
 
         if ($gingerOrder['status'] == 'completed' || $gingerOrder['status'] == 'processing')
@@ -68,7 +68,7 @@ class WC_Ginger_Callback extends WC_Ginger_Gateway
         }
 
         $base_msg = __('There was a problem processing your transaction.', WC_Ginger_BankConfig::BANK_PREFIX);
-        $full_msg = trim($base_msg . ' ' . (current($gingerOrder['transactions'])['customer_message'] ?? ''));
+        $full_msg = trim($base_msg . ' ' . $this->ginger_get_customer_message($gingerOrder));
         wc_add_notice($full_msg, 'error');        if ($this->get_option('failed_redirect') == 'cart') {
             $url = $order->get_cancel_order_url();
         } else {
